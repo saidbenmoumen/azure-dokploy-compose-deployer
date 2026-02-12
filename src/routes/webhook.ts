@@ -1,9 +1,29 @@
 import { Hono } from "hono";
 import type { AzureEvent } from "../../types";
+import { DatabaseManager } from "../lib/database";
 import { DokployClient } from "../lib/dokploy-client";
-import { extractBranchName, generatePreviewUrl } from "../lib/utils";
+import {
+	extractBranchName,
+	generateDbName,
+	generatePreviewUrl,
+} from "../lib/utils";
 
 export const webhookRouter = new Hono();
+
+const DATABASE_HOST = process.env.DATABASE_HOST;
+const DATABASE_USER = process.env.DATABASE_USER;
+const DATABASE_PASSWORD = process.env.DATABASE_PASSWORD;
+if (!DATABASE_HOST || !DATABASE_USER || !DATABASE_PASSWORD) {
+	throw new Error(
+		"Missing required DATABASE_HOST/DATABASE_USER/DATABASE_PASSWORD environment variables",
+	);
+}
+
+const dbManager = new DatabaseManager(
+	DATABASE_HOST,
+	DATABASE_USER,
+	DATABASE_PASSWORD,
+);
 
 webhookRouter.post("/azure", async (c) => {
 	try {
@@ -92,6 +112,15 @@ webhookRouter.post("/azure", async (c) => {
 						message: "No preview deployment found to remove",
 					});
 
+				// drop preview database and its dedicated user
+				const dbName = generateDbName(branch);
+				try {
+					await dbManager.dropDatabase(dbName);
+					console.log(`Dropped database and user for: ${dbName}`);
+				} catch (dbError) {
+					console.error(`Failed to drop database ${dbName}:`, dbError);
+				}
+
 				await dokploy.removeApplication({
 					applicationId: targetApplication.applicationId,
 				});
@@ -100,7 +129,7 @@ webhookRouter.post("/azure", async (c) => {
 					success: true,
 					branch,
 					applicationId: targetApplication.applicationId,
-					message: "Preview deployment removed",
+					message: "Preview deployment and database removed",
 				});
 			}
 
@@ -140,16 +169,30 @@ webhookRouter.post("/azure", async (c) => {
 				).filter((a) => !existingApplicationIds.includes(a.applicationId))[0];
 				if (!newApplication) throw new Error("No application found");
 
+				const dbName = generateDbName(branch);
 				try {
+					// create preview database with dedicated user
+					const dbCredentials = await dbManager.createDatabase(dbName);
+					console.log(
+						`Created database ${dbCredentials.database} with user ${dbCredentials.username}`,
+					);
+
+					const appEnv =
+						newApplication.env
+							?.replace("${{project.WP_HOME}}", previewUrl)
+							?.replace(
+								"${{project.DATABASE_URL}}",
+								dbCredentials.connectionUrl,
+							) ?? null;
+
 					// update new application general details
 					await dokploy.updateApplication({
 						applicationId: newApplication.applicationId,
 						name: `@${branch}`,
 						description: resource.pushedBy.displayName,
 						customGitBranch: branch,
-						env:
-							newApplication.env?.replace("${{project.WP_HOME}}", previewUrl) ??
-							null,
+						env: appEnv,
+						createdAt: new Date().toISOString(),
 					});
 
 					// remove new application existing domains
@@ -182,11 +225,16 @@ webhookRouter.post("/azure", async (c) => {
 						previewUrl,
 					});
 				} catch (error) {
-					// error cleanup new application created
+					// error cleanup: remove application and database
 					console.error(
 						"Error during preview deployment, cleaning up...",
 						error,
 					);
+					try {
+						await dbManager.dropDatabase(dbName);
+					} catch (dbCleanupError) {
+						console.error("Failed to cleanup database:", dbCleanupError);
+					}
 					try {
 						await dokploy.removeApplication({
 							applicationId: newApplication.applicationId,

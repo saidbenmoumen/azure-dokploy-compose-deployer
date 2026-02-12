@@ -25,10 +25,25 @@ export function extractBranchName(ref: string): string {
 }
 
 /**
+ * Generate the preview prefix for a branch (slug-hash)
+ */
+export function generatePreviewPrefix(branchName: string): string {
+	const slug = slugify(branchName);
+	const hashValue = hash(branchName, 8);
+	return `${slug}-${hashValue}`;
+}
+
+/**
  * Generate preview URL for a branch
  */
 export function generatePreviewUrl(branchName: string, devUrl: string): string {
-	const slug = slugify(branchName);
-	const hashValue = hash(branchName, 8);
-	return `${slug}-${hashValue}.${devUrl}`;
+	return `${generatePreviewPrefix(branchName)}.${devUrl}`;
+}
+
+/**
+ * Generate a database name from a branch name.
+ * Uses the same preview prefix but with underscores instead of dashes (MySQL-safe).
+ */
+export function generateDbName(branchName: string): string {
+	return generatePreviewPrefix(branchName).replace(/-/g, "_");
 }
