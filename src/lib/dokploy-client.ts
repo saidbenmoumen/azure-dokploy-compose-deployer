@@ -1,9 +1,12 @@
 import type {
-	DokployCompose,
-	DokployDomain,
-	DokployEnvironment,
-	DokployProject,
-} from "../types/dokploy";
+	ComposeDelete,
+	ComposeDeploy,
+	ComposeUpdate,
+	DomainByComposeId,
+	DomainCreate,
+	ProjectDuplicate,
+	ProjectOne,
+} from "../types";
 
 export class DokployClient {
 	private baseUrl: string;
@@ -44,67 +47,7 @@ export class DokployClient {
 		composeId: string;
 		environmentId: string;
 	}) {
-		return this.request<{
-			environmentId: string;
-			name: string;
-			description: string;
-			createdAt: string;
-			env: string | null;
-			projectId: string;
-			isDefault: true;
-			applications: [];
-			mariadb: [];
-			mongo: [];
-			mysql: [];
-			postgres: [];
-			redis: [];
-			compose: Array<{
-				composeId: string;
-				name: string;
-				appName: string;
-				description: string;
-				env: string | null;
-				composeFile: string;
-				refreshToken: string;
-				sourceType: string;
-				composeType: "docker-compose";
-				repository: null;
-				owner: null;
-				branch: string;
-				autoDeploy: true;
-				gitlabProjectId: null;
-				gitlabRepository: null;
-				gitlabOwner: null;
-				gitlabBranch: null;
-				gitlabPathNamespace: null;
-				bitbucketRepository: null;
-				bitbucketOwner: null;
-				bitbucketBranch: null;
-				giteaRepository: null;
-				giteaOwner: null;
-				giteaBranch: null;
-				customGitUrl: null;
-				customGitBranch: null;
-				customGitSSHKeyId: null;
-				command: "";
-				enableSubmodules: false;
-				composePath: string;
-				suffix: "";
-				randomize: false;
-				isolatedDeployment: false;
-				isolatedDeploymentsVolume: false;
-				triggerType: "push";
-				composeStatus: "error";
-				environmentId: string;
-				createdAt: string;
-				watchPaths: null;
-				githubId: null;
-				gitlabId: null;
-				bitbucketId: null;
-				giteaId: null;
-				serverId: null;
-			}>;
-		}>("/api/project.duplicate", {
+		return this.request<ProjectDuplicate>("/api/project.duplicate", {
 			method: "POST",
 			body: JSON.stringify({
 				name: data.name,
@@ -122,11 +65,7 @@ export class DokployClient {
 	}
 
 	async getProjectById(projectId: string) {
-		return this.request<
-			DokployProject & {
-				environments: Pick<DokployEnvironment, "environmentId" | "compose">[];
-			}
-		>(`/api/project.one?projectId=${projectId}`);
+		return this.request<ProjectOne>(`/api/project.one?projectId=${projectId}`);
 	}
 
 	// COMPOSE
@@ -138,22 +77,22 @@ export class DokployClient {
 		branch?: string;
 		customGitBranch?: string;
 		env?: string | null;
-	}): Promise<DokployCompose> {
-		return this.request<DokployCompose>("/api/compose.update", {
+	}) {
+		return this.request<ComposeUpdate>("/api/compose.update", {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
 	}
 
 	async deployCompose(data: { composeId: string }) {
-		return this.request<void>("/api/compose.deploy", {
+		return this.request<ComposeDeploy>("/api/compose.deploy", {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
 	}
 
 	async removeCompose(composeId: string) {
-		return this.request<void>("/api/compose.delete", {
+		return this.request<ComposeDelete>("/api/compose.delete", {
 			method: "POST",
 			body: JSON.stringify({ composeId, deleteVolumes: true }),
 		});
@@ -171,7 +110,7 @@ export class DokployClient {
 		serviceName?: string;
 		applicationId?: string;
 	}) {
-		return this.request<DokployDomain>("/api/domain.create", {
+		return this.request<DomainCreate>("/api/domain.create", {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
@@ -185,7 +124,7 @@ export class DokployClient {
 	}
 
 	async getDomainsByCompose(composeId: string) {
-		return this.request<DokployDomain[]>(
+		return this.request<DomainByComposeId>(
 			`/api/domain.byComposeId?composeId=${composeId}`,
 		);
 	}

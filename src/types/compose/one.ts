@@ -1,0 +1,280 @@
+// Auto-generated. Do not edit.
+// RouterOutputs["compose"]["one"]
+
+export type ComposeOne = {
+  hasGitProviderAccess: false | true;
+  unauthorizedProvider: null | string;
+  name: string;
+  createdAt: string;
+  refreshToken: null | string;
+  sourceType: "bitbucket" | "gitea" | "github" | "gitlab" | "raw" | "git";
+  composeType: "docker-compose" | "stack";
+  triggerType: null | "push" | "tag";
+  description: null | string;
+  owner: null | string;
+  serverId: null | string;
+  appName: string;
+  command: string;
+  env: null | string;
+  environmentId: string;
+  watchPaths: null | string[];
+  repository: null | string;
+  branch: null | string;
+  autoDeploy: null | false | true;
+  gitlabProjectId: null | number;
+  gitlabRepository: null | string;
+  gitlabOwner: null | string;
+  gitlabBranch: null | string;
+  gitlabPathNamespace: null | string;
+  giteaRepository: null | string;
+  giteaOwner: null | string;
+  giteaBranch: null | string;
+  bitbucketRepository: null | string;
+  bitbucketRepositorySlug: null | string;
+  bitbucketOwner: null | string;
+  bitbucketBranch: null | string;
+  customGitUrl: null | string;
+  customGitBranch: null | string;
+  customGitSSHKeyId: null | string;
+  enableSubmodules: false | true;
+  githubId: null | string;
+  gitlabId: null | string;
+  giteaId: null | string;
+  bitbucketId: null | string;
+  composeId: string;
+  composeFile: string;
+  composePath: string;
+  suffix: string;
+  randomize: false | true;
+  isolatedDeployment: false | true;
+  isolatedDeploymentsVolume: false | true;
+  composeStatus: "idle" | "running" | "done" | "error";
+  backups: Array<{
+      userId: null | string;
+      databaseType: "mariadb" | "mongo" | "mysql" | "postgres" | "web-server";
+      backupType: "compose" | "database";
+      metadata: undefined | null | {
+          postgres?: undefined | {
+              databaseUser: string;
+            };
+          mariadb?: undefined | {
+              databaseUser: string;
+              databasePassword: string;
+            };
+          mongo?: undefined | {
+              databaseUser: string;
+              databasePassword: string;
+            };
+          mysql?: undefined | {
+              databaseRootPassword: string;
+            };
+        };
+      appName: string;
+      prefix: string;
+      enabled: null | false | true;
+      serviceName: null | string;
+      composeId: null | string;
+      backupId: string;
+      postgresId: null | string;
+      mariadbId: null | string;
+      mongoId: null | string;
+      mysqlId: null | string;
+      database: string;
+      schedule: string;
+      destinationId: string;
+      keepLatestCount: null | number;
+      deployments: Array<{
+          createdAt: string;
+          description: null | string;
+          serverId: null | string;
+          status: null | "running" | "done" | "error" | "cancelled";
+          applicationId: null | string;
+          title: string;
+          buildServerId: null | string;
+          deploymentId: string;
+          logPath: string;
+          pid: null | string;
+          composeId: null | string;
+          isPreviewDeployment: null | false | true;
+          previewDeploymentId: null | string;
+          startedAt: null | string;
+          finishedAt: null | string;
+          errorMessage: null | string;
+          scheduleId: null | string;
+          backupId: null | string;
+          rollbackId: null | string;
+          volumeBackupId: null | string;
+        }>;
+      destination: {
+        name: string;
+        createdAt: Date;
+        endpoint: string;
+        organizationId: string;
+        destinationId: string;
+        provider: null | string;
+        accessKey: string;
+        secretAccessKey: string;
+        bucket: string;
+        region: string;
+      };
+    }>;
+  bitbucket: null | {
+      gitProviderId: string;
+      bitbucketId: string;
+      bitbucketUsername: null | string;
+      bitbucketEmail: null | string;
+      appPassword: null | string;
+      apiToken: null | string;
+      bitbucketWorkspaceName: null | string;
+    };
+  deployments: Array<{
+      createdAt: string;
+      description: null | string;
+      serverId: null | string;
+      status: null | "running" | "done" | "error" | "cancelled";
+      applicationId: null | string;
+      title: string;
+      buildServerId: null | string;
+      deploymentId: string;
+      logPath: string;
+      pid: null | string;
+      composeId: null | string;
+      isPreviewDeployment: null | false | true;
+      previewDeploymentId: null | string;
+      startedAt: null | string;
+      finishedAt: null | string;
+      errorMessage: null | string;
+      scheduleId: null | string;
+      backupId: null | string;
+      rollbackId: null | string;
+      volumeBackupId: null | string;
+    }>;
+  domains: Array<{
+      createdAt: string;
+      domainType: null | "compose" | "application" | "preview";
+      certificateType: "custom" | "letsencrypt" | "none";
+      port: null | number;
+      path: null | string;
+      host: string;
+      serviceName: null | string;
+      applicationId: null | string;
+      composeId: null | string;
+      previewDeploymentId: null | string;
+      domainId: string;
+      https: false | true;
+      uniqueConfigKey: number;
+      customCertResolver: null | string;
+      internalPath: null | string;
+      stripPath: false | true;
+    }>;
+  gitea: null | {
+      accessToken: null | string;
+      refreshToken: null | string;
+      expiresAt: null | number;
+      gitProviderId: string;
+      redirectUri: null | string;
+      giteaId: string;
+      giteaUrl: string;
+      giteaInternalUrl: null | string;
+      clientId: null | string;
+      clientSecret: null | string;
+      scopes: null | string;
+      lastAuthenticatedAt: null | number;
+    };
+  github: null | {
+      githubId: string;
+      githubAppName: null | string;
+      githubAppId: null | number;
+      githubClientId: null | string;
+      githubClientSecret: null | string;
+      githubInstallationId: null | string;
+      githubPrivateKey: null | string;
+      githubWebhookSecret: null | string;
+      gitProviderId: string;
+    };
+  gitlab: null | {
+      accessToken: null | string;
+      refreshToken: null | string;
+      expiresAt: null | number;
+      secret: null | string;
+      applicationId: null | string;
+      gitProviderId: string;
+      gitlabId: string;
+      gitlabUrl: string;
+      gitlabInternalUrl: null | string;
+      redirectUri: null | string;
+      groupName: null | string;
+    };
+  mounts: Array<{
+      serviceType: "compose" | "mariadb" | "mongo" | "mysql" | "postgres" | "redis" | "application";
+      type: "bind" | "volume" | "file";
+      filePath: null | string;
+      content: null | string;
+      applicationId: null | string;
+      composeId: null | string;
+      mountId: string;
+      hostPath: null | string;
+      volumeName: null | string;
+      mountPath: string;
+      postgresId: null | string;
+      mariadbId: null | string;
+      mongoId: null | string;
+      mysqlId: null | string;
+      redisId: null | string;
+    }>;
+  server: null | {
+      name: string;
+      createdAt: string;
+      serverStatus: "active" | "inactive";
+      serverType: "deploy" | "build";
+      username: string;
+      description: null | string;
+      serverId: string;
+      ipAddress: string;
+      port: number;
+      appName: string;
+      enableDockerCleanup: false | true;
+      organizationId: string;
+      command: string;
+      sshKeyId: null | string;
+      metricsConfig: {
+        server: {
+          type: "Dokploy" | "Remote";
+          refreshRate: number;
+          port: number;
+          token: string;
+          urlCallback: string;
+          retentionDays: number;
+          cronJob: string;
+          thresholds: {
+            cpu: number;
+            memory: number;
+          };
+        };
+        containers: {
+          refreshRate: number;
+          services: {
+            include: string[];
+            exclude: string[];
+          };
+        };
+      };
+    };
+  environment: {
+    name: string;
+    createdAt: string;
+    description: null | string;
+    projectId: string;
+    env: string;
+    isDefault: false | true;
+    environmentId: string;
+    project: {
+      name: string;
+      createdAt: string;
+      description: null | string;
+      organizationId: string;
+      projectId: string;
+      env: string;
+    };
+  };
+};

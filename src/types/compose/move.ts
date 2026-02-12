@@ -1,0 +1,50 @@
+// Auto-generated. Do not edit.
+// RouterOutputs["compose"]["move"]
+
+export type ComposeMove = {
+  composeId: string;
+  name: string;
+  appName: string;
+  description: null | string;
+  env: null | string;
+  composeFile: string;
+  refreshToken: null | string;
+  sourceType: "bitbucket" | "gitea" | "github" | "gitlab" | "raw" | "git";
+  composeType: "docker-compose" | "stack";
+  repository: null | string;
+  owner: null | string;
+  branch: null | string;
+  autoDeploy: null | false | true;
+  gitlabProjectId: null | number;
+  gitlabRepository: null | string;
+  gitlabOwner: null | string;
+  gitlabBranch: null | string;
+  gitlabPathNamespace: null | string;
+  bitbucketRepository: null | string;
+  bitbucketRepositorySlug: null | string;
+  bitbucketOwner: null | string;
+  bitbucketBranch: null | string;
+  giteaRepository: null | string;
+  giteaOwner: null | string;
+  giteaBranch: null | string;
+  customGitUrl: null | string;
+  customGitBranch: null | string;
+  customGitSSHKeyId: null | string;
+  command: string;
+  enableSubmodules: false | true;
+  composePath: string;
+  suffix: string;
+  randomize: false | true;
+  isolatedDeployment: false | true;
+  isolatedDeploymentsVolume: false | true;
+  triggerType: null | "push" | "tag";
+  composeStatus: "idle" | "running" | "done" | "error";
+  environmentId: string;
+  createdAt: string;
+  watchPaths: null | string[];
+  githubId: null | string;
+  gitlabId: null | string;
+  bitbucketId: null | string;
+  giteaId: null | string;
+  serverId: null | string;
+};

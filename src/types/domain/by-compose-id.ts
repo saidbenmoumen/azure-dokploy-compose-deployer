@@ -1,0 +1,68 @@
+// Auto-generated. Do not edit.
+// RouterOutputs["domain"]["byComposeId"]
+
+export type DomainByComposeId = Array<{
+    createdAt: string;
+    domainType: null | "compose" | "application" | "preview";
+    certificateType: "custom" | "letsencrypt" | "none";
+    port: null | number;
+    path: null | string;
+    host: string;
+    serviceName: null | string;
+    applicationId: null | string;
+    composeId: null | string;
+    previewDeploymentId: null | string;
+    domainId: string;
+    https: false | true;
+    uniqueConfigKey: number;
+    customCertResolver: null | string;
+    internalPath: null | string;
+    stripPath: false | true;
+    compose: null | {
+        name: string;
+        createdAt: string;
+        refreshToken: null | string;
+        sourceType: "bitbucket" | "gitea" | "github" | "gitlab" | "raw" | "git";
+        composeType: "docker-compose" | "stack";
+        triggerType: null | "push" | "tag";
+        description: null | string;
+        owner: null | string;
+        serverId: null | string;
+        appName: string;
+        command: string;
+        env: null | string;
+        environmentId: string;
+        watchPaths: null | string[];
+        repository: null | string;
+        branch: null | string;
+        autoDeploy: null | false | true;
+        gitlabProjectId: null | number;
+        gitlabRepository: null | string;
+        gitlabOwner: null | string;
+        gitlabBranch: null | string;
+        gitlabPathNamespace: null | string;
+        giteaRepository: null | string;
+        giteaOwner: null | string;
+        giteaBranch: null | string;
+        bitbucketRepository: null | string;
+        bitbucketRepositorySlug: null | string;
+        bitbucketOwner: null | string;
+        bitbucketBranch: null | string;
+        customGitUrl: null | string;
+        customGitBranch: null | string;
+        customGitSSHKeyId: null | string;
+        enableSubmodules: false | true;
+        githubId: null | string;
+        gitlabId: null | string;
+        giteaId: null | string;
+        bitbucketId: null | string;
+        composeId: string;
+        composeFile: string;
+        composePath: string;
+        suffix: string;
+        randomize: false | true;
+        isolatedDeployment: false | true;
+        isolatedDeploymentsVolume: false | true;
+        composeStatus: "idle" | "running" | "done" | "error";
+      };
+  }>;
