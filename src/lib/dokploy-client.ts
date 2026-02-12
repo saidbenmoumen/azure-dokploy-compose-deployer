@@ -1,12 +1,5 @@
-import type {
-	ComposeDelete,
-	ComposeDeploy,
-	ComposeUpdate,
-	DomainByComposeId,
-	DomainCreate,
-	ProjectDuplicate,
-	ProjectOne,
-} from "../types";
+import type { RouterInputs } from "./types/inputs";
+import type { RouterOutputs } from "./types/outputs";
 
 export class DokployClient {
 	private baseUrl: string;
@@ -42,90 +35,73 @@ export class DokployClient {
 	}
 
 	// PROJECT
-	async duplicateProject(data: {
-		name: string;
-		composeId: string;
-		environmentId: string;
-	}) {
-		return this.request<ProjectDuplicate>("/api/project.duplicate", {
-			method: "POST",
-			body: JSON.stringify({
-				name: data.name,
-				sourceEnvironmentId: data.environmentId,
-				selectedServices: [
-					{
-						id: data.composeId,
-						type: "compose",
-					},
-				],
-				includeServices: true,
-				duplicateInSameProject: true,
-			}),
-		});
+	async duplicateProject(data: RouterInputs["project"]["duplicate"]) {
+		return this.request<RouterOutputs["project"]["duplicate"]>(
+			"/project.duplicate",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
 	}
 
-	async getProjectById(projectId: string) {
-		return this.request<ProjectOne>(`/api/project.one?projectId=${projectId}`);
+	async getProjectById(data: RouterInputs["project"]["one"]) {
+		return this.request<RouterOutputs["project"]["one"]>(
+			`/project.one?projectId=${data.projectId}`,
+		);
 	}
 
-	// COMPOSE
-	async updateCompose(data: {
-		composeId: string;
-		name?: string;
-		appName?: string;
-		description?: string;
-		branch?: string;
-		customGitBranch?: string;
-		env?: string | null;
-	}) {
-		return this.request<ComposeUpdate>("/api/compose.update", {
-			method: "POST",
-			body: JSON.stringify(data),
-		});
+	// APPLICATION
+	async updateApplication(data: RouterInputs["application"]["update"]) {
+		return this.request<RouterOutputs["application"]["update"]>(
+			"/application.update",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
 	}
 
-	async deployCompose(data: { composeId: string }) {
-		return this.request<ComposeDeploy>("/api/compose.deploy", {
-			method: "POST",
-			body: JSON.stringify(data),
-		});
+	async deployApplication(data: RouterInputs["application"]["deploy"]) {
+		return this.request<RouterOutputs["application"]["deploy"]>(
+			"/application.deploy",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
 	}
 
-	async removeCompose(composeId: string) {
-		return this.request<ComposeDelete>("/api/compose.delete", {
-			method: "POST",
-			body: JSON.stringify({ composeId, deleteVolumes: true }),
-		});
+	async removeApplication(data: RouterInputs["application"]["delete"]) {
+		return this.request<RouterOutputs["application"]["delete"]>(
+			"/application.delete",
+			{
+				method: "POST",
+				body: JSON.stringify(data),
+			},
+		);
 	}
 
 	// DOMAIN
-	async createDomain(data: {
-		host: string;
-		path?: string;
-		port?: number;
-		https?: boolean;
-		certificateType?: "letsencrypt" | "none" | "custom";
-		domainType?: "compose" | "application" | "preview";
-		composeId?: string;
-		serviceName?: string;
-		applicationId?: string;
-	}) {
-		return this.request<DomainCreate>("/api/domain.create", {
+	async createDomain(data: RouterInputs["domain"]["create"]) {
+		return this.request<RouterOutputs["domain"]["create"]>("/domain.create", {
 			method: "POST",
 			body: JSON.stringify(data),
 		});
 	}
 
 	async deleteDomain(domainId: string) {
-		return this.request<void>("/api/domain.delete", {
+		return this.request<void>("/domain.delete", {
 			method: "POST",
 			body: JSON.stringify({ domainId }),
 		});
 	}
 
-	async getDomainsByCompose(composeId: string) {
-		return this.request<DomainByComposeId>(
-			`/api/domain.byComposeId?composeId=${composeId}`,
+	async getDomainsByApplication(
+		data: RouterInputs["domain"]["byApplicationId"],
+	) {
+		return this.request<RouterOutputs["domain"]["byApplicationId"]>(
+			`/domain.byApplicationId?applicationId=${data.applicationId}`,
 		);
 	}
 }

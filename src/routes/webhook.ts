@@ -16,7 +16,7 @@ webhookRouter.post("/azure", async (c) => {
 
 		const PROJECT_ID = process.env.PROJECT_ID;
 		const ENVIRONMENT_ID = process.env.ENVIRONMENT_ID;
-		const COMPOSE_ID = process.env.COMPOSE_ID;
+		const APPLICATION_ID = process.env.APPLICATION_ID;
 		const DOKPLOY_URL = process.env.DOKPLOY_URL;
 		const DOKPLOY_API_TOKEN = process.env.DOKPLOY_API_TOKEN;
 		const DOKPLOY_DEV_URL = process.env.DOKPLOY_DEV_URL;
@@ -26,7 +26,7 @@ webhookRouter.post("/azure", async (c) => {
 			!DOKPLOY_API_TOKEN ||
 			!PROJECT_ID ||
 			!ENVIRONMENT_ID ||
-			!COMPOSE_ID
+			!APPLICATION_ID
 		) {
 			return c.json({
 				success: false,
@@ -37,7 +37,9 @@ webhookRouter.post("/azure", async (c) => {
 		const dokploy = new DokployClient(DOKPLOY_URL, DOKPLOY_API_TOKEN);
 
 		// check project
-		const project = await dokploy.getProjectById(PROJECT_ID);
+		const project = await dokploy.getProjectById({
+			projectId: PROJECT_ID,
+		});
 
 		// check environment
 		const environment =
@@ -45,11 +47,11 @@ webhookRouter.post("/azure", async (c) => {
 			null;
 		if (!environment) throw new Error("Environment not found");
 
-		// default branch compose
-		const defaultCompose = environment.compose.find(
-			(c) => c.composeId === COMPOSE_ID,
+		// default branch application (template)
+		const defaultApplication = environment.applications.find(
+			(a) => a.applicationId === APPLICATION_ID,
 		);
-		if (!defaultCompose) throw new Error("Default Compose not found");
+		if (!defaultApplication) throw new Error("Default Application not found");
 
 		if (event.eventType === "git.push") {
 			// get resource
@@ -69,11 +71,12 @@ webhookRouter.post("/azure", async (c) => {
 				resource.repository.defaultBranch,
 			);
 
-			// find target compose if exists
-			const targetCompose =
+			// find target application if exists
+			const targetApplication =
 				branch === defaultBranch
-					? defaultCompose
-					: (environment.compose.find((c) => c.name === `@${branch}`) ?? null);
+					? defaultApplication
+					: (environment.applications.find((a) => a.name === `@${branch}`) ??
+						null);
 
 			// 000.. means branch deleted
 			const action =
@@ -83,113 +86,127 @@ webhookRouter.post("/azure", async (c) => {
 
 			// DELETE BRANCH
 			if (action === "delete") {
-				if (!targetCompose)
+				if (!targetApplication)
 					return c.json({
 						success: true,
 						message: "No preview deployment found to remove",
 					});
 
-				await dokploy.removeCompose(targetCompose.composeId);
+				await dokploy.removeApplication({
+					applicationId: targetApplication.applicationId,
+				});
 
 				return c.json({
 					success: true,
 					branch,
-					composeId: targetCompose.composeId,
+					applicationId: targetApplication.applicationId,
 					message: "Preview deployment removed",
 				});
 			}
 
 			// UPDATE BRANCH
 			// if not exist create new preview deployment
-			if (!targetCompose) {
+			if (!targetApplication) {
 				// generate preview domain url
 				const previewUrl = `https://${generatePreviewUrl(branch, DOKPLOY_DEV_URL)}`;
 
-				// duplicate default compose
-				const { compose: composes, projectId } = await dokploy.duplicateProject(
-					{
-						name: `@${branch}`,
-						environmentId: environment.environmentId,
-						composeId: defaultCompose.composeId,
-					},
+				// snapshot existing application IDs before duplication
+				const existingApplicationIds = environment.applications.map(
+					(a) => a.applicationId,
 				);
 
-				//  get new compose created
-				const exsitingComposeIds = composes.map((c) => c.composeId);
-				const { environments } = await dokploy.getProjectById(projectId);
-				const newCompose = (
+				// duplicate default application
+				await dokploy.duplicateProject({
+					name: `${branch}`,
+					sourceEnvironmentId: environment.environmentId,
+					selectedServices: [
+						{
+							id: defaultApplication.applicationId,
+							type: "application",
+						},
+					],
+					includeServices: true,
+					duplicateInSameProject: true,
+				});
+
+				// get new application created by comparing against snapshot
+				const { environments } = await dokploy.getProjectById({
+					projectId: PROJECT_ID,
+				});
+				const newApplication = (
 					environments.find(
 						(e) => e.environmentId === environment.environmentId,
-					)?.compose ?? []
-				).filter((f) => !exsitingComposeIds.includes(f.composeId))[0];
-				if (!newCompose) throw new Error("No compose found");
+					)?.applications ?? []
+				).filter((a) => !existingApplicationIds.includes(a.applicationId))[0];
+				if (!newApplication) throw new Error("No application found");
 
 				try {
-					// update new compose general details
-					await dokploy.updateCompose({
-						composeId: newCompose.composeId,
+					// update new application general details
+					await dokploy.updateApplication({
+						applicationId: newApplication.applicationId,
 						name: `@${branch}`,
 						description: resource.pushedBy.displayName,
 						customGitBranch: branch,
 						env:
-							newCompose.env?.replace("${{project.WP_HOME}}", previewUrl) ??
+							newApplication.env?.replace("${{project.WP_HOME}}", previewUrl) ??
 							null,
 					});
 
-					// remove new compose existing domains
-					const composeDomains = await dokploy.getDomainsByCompose(
-						newCompose.composeId,
-					);
+					// remove new application existing domains
+					const applicationDomains = await dokploy.getDomainsByApplication({
+						applicationId: newApplication.applicationId,
+					});
 					await Promise.all(
-						composeDomains.map((d) => dokploy.deleteDomain(d.domainId)),
+						applicationDomains.map((d) => dokploy.deleteDomain(d.domainId)),
 					);
 
-					// create & assign new preview domain to nginx:80
+					// create & assign new preview domain to application
 					await dokploy.createDomain({
-						composeId: newCompose.composeId,
-						serviceName: "nginx",
-						domainType: "compose",
+						applicationId: newApplication.applicationId,
+						domainType: "application",
 						host: previewUrl.replace("https://", ""),
 						port: 80,
 						https: true,
 						certificateType: "letsencrypt",
 					});
 
-					// trigger new deployment on new created compose
-					await dokploy.deployCompose({
-						composeId: newCompose.composeId,
+					// trigger new deployment on new created application
+					await dokploy.deployApplication({
+						applicationId: newApplication.applicationId,
 					});
 
 					return c.json({
 						success: true,
 						branch,
-						composeId: newCompose.composeId,
+						applicationId: newApplication.applicationId,
 						previewUrl,
 					});
 				} catch (error) {
-					// error cleanup new compose created
+					// error cleanup new application created
 					console.error(
 						"Error during preview deployment, cleaning up...",
 						error,
 					);
 					try {
-						await dokploy.removeCompose(newCompose.composeId);
+						await dokploy.removeApplication({
+							applicationId: newApplication.applicationId,
+						});
 					} catch (cleanupError) {
-						console.error("Failed to cleanup project:", cleanupError);
+						console.error("Failed to cleanup application:", cleanupError);
 					}
 					throw error;
 				}
 			}
 
-			// otherwise exists, trigger deploy commit on compose
-			await dokploy.deployCompose({
-				composeId: targetCompose.composeId,
+			// otherwise exists, trigger deploy on application
+			await dokploy.deployApplication({
+				applicationId: targetApplication.applicationId,
 			});
 
 			return c.json({
 				success: true,
 				branch,
-				composeId: targetCompose.composeId,
+				applicationId: targetApplication.applicationId,
 			});
 		} else {
 			console.log("Unhandled Event", JSON.stringify(event, null, 2));
