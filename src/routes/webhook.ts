@@ -29,10 +29,7 @@ webhookRouter.post("/azure", async (c) => {
 	try {
 		const event = await c.req.json<AzureEvent>();
 
-		console.log("Received Azure webhook event:", {
-			eventType: event.eventType,
-			event,
-		});
+		console.log(`[webhook] received event: ${event.eventType}`);
 
 		const PROJECT_ID = process.env.PROJECT_ID;
 		const ENVIRONMENT_ID = process.env.ENVIRONMENT_ID;
@@ -48,6 +45,7 @@ webhookRouter.post("/azure", async (c) => {
 			!ENVIRONMENT_ID ||
 			!APPLICATION_ID
 		) {
+			console.error("[webhook] missing required environment variables");
 			return c.json({
 				success: false,
 				message: "Missing required environment variables",
@@ -79,6 +77,7 @@ webhookRouter.post("/azure", async (c) => {
 			const refUpdate = resource.refUpdates[0];
 
 			if (!refUpdate) {
+				console.log("[webhook] no ref updates in push event, skipping");
 				return c.json({
 					success: false,
 					message: "No ref updates in push event",
@@ -104,26 +103,44 @@ webhookRouter.post("/azure", async (c) => {
 					? "delete"
 					: "update";
 
+			console.log(
+				`[webhook] branch=${branch} action=${action} pushedBy=${resource.pushedBy.displayName} existingApp=${targetApplication?.applicationId ?? "none"}`,
+			);
+
 			// DELETE BRANCH
 			if (action === "delete") {
-				if (!targetApplication)
+				if (!targetApplication) {
+					console.log(
+						`[webhook] no preview deployment found for branch=${branch}, nothing to remove`,
+					);
 					return c.json({
 						success: true,
 						message: "No preview deployment found to remove",
 					});
+				}
 
 				// drop preview database and its dedicated user
 				const dbName = generateDbName(branch);
 				try {
+					console.log(`[webhook] dropping database=${dbName}`);
 					await dbManager.dropDatabase(dbName);
-					console.log(`Dropped database and user for: ${dbName}`);
+					console.log(`[webhook] dropped database=${dbName}`);
 				} catch (dbError) {
-					console.error(`Failed to drop database ${dbName}:`, dbError);
+					console.error(
+						`[webhook] failed to drop database=${dbName}:`,
+						dbError,
+					);
 				}
 
+				console.log(
+					`[webhook] removing application=${targetApplication.applicationId}`,
+				);
 				await dokploy.removeApplication({
 					applicationId: targetApplication.applicationId,
 				});
+				console.log(
+					`[webhook] removed application=${targetApplication.applicationId} for branch=${branch}`,
+				);
 
 				return c.json({
 					success: true,
@@ -136,6 +153,10 @@ webhookRouter.post("/azure", async (c) => {
 			// UPDATE BRANCH
 			// if not exist create new preview deployment
 			if (!targetApplication) {
+				console.log(
+					`[webhook] creating new preview deployment for branch=${branch}`,
+				);
+
 				// generate preview domain url
 				const previewUrl = `https://${generatePreviewUrl(branch, DOKPLOY_DEV_URL)}`;
 
@@ -145,6 +166,9 @@ webhookRouter.post("/azure", async (c) => {
 				);
 
 				// duplicate default application
+				console.log(
+					`[webhook] duplicating template application=${APPLICATION_ID}`,
+				);
 				await dokploy.duplicateProject({
 					name: `${branch}`,
 					sourceEnvironmentId: environment.environmentId,
@@ -169,12 +193,17 @@ webhookRouter.post("/azure", async (c) => {
 				).filter((a) => !existingApplicationIds.includes(a.applicationId))[0];
 				if (!newApplication) throw new Error("No application found");
 
+				console.log(
+					`[webhook] duplicated as application=${newApplication.applicationId}`,
+				);
+
 				const dbName = generateDbName(branch);
 				try {
 					// create preview database with dedicated user
+					console.log(`[webhook] creating database=${dbName}`);
 					const dbCredentials = await dbManager.createDatabase(dbName);
 					console.log(
-						`Created database ${dbCredentials.database} with user ${dbCredentials.username}`,
+						`[webhook] created database=${dbCredentials.database} user=${dbCredentials.username}`,
 					);
 
 					const appEnv =
@@ -186,6 +215,9 @@ webhookRouter.post("/azure", async (c) => {
 							) ?? null;
 
 					// update new application general details
+					console.log(
+						`[webhook] updating application config name=@${branch} gitBranch=${branch}`,
+					);
 					await dokploy.updateApplication({
 						applicationId: newApplication.applicationId,
 						name: `@${branch}`,
@@ -199,24 +231,36 @@ webhookRouter.post("/azure", async (c) => {
 					const applicationDomains = await dokploy.getDomainsByApplication({
 						applicationId: newApplication.applicationId,
 					});
+					console.log(
+						`[webhook] removing ${applicationDomains.length} existing domain(s)`,
+					);
 					await Promise.all(
 						applicationDomains.map((d) => dokploy.deleteDomain(d.domainId)),
 					);
 
 					// create & assign new preview domain to application
+					const host = previewUrl.replace("https://", "");
+					console.log(`[webhook] creating domain=${host}`);
 					await dokploy.createDomain({
 						applicationId: newApplication.applicationId,
 						domainType: "application",
-						host: previewUrl.replace("https://", ""),
+						host,
 						port: 80,
 						https: true,
 						certificateType: "letsencrypt",
 					});
 
 					// trigger new deployment on new created application
+					console.log(
+						`[webhook] deploying application=${newApplication.applicationId}`,
+					);
 					await dokploy.deployApplication({
 						applicationId: newApplication.applicationId,
 					});
+
+					console.log(
+						`[webhook] preview deployment complete branch=${branch} url=${previewUrl} application=${newApplication.applicationId} database=${dbName}`,
+					);
 
 					return c.json({
 						success: true,
@@ -227,29 +271,45 @@ webhookRouter.post("/azure", async (c) => {
 				} catch (error) {
 					// error cleanup: remove application and database
 					console.error(
-						"Error during preview deployment, cleaning up...",
+						`[webhook] error during preview creation for branch=${branch}, cleaning up...`,
 						error,
 					);
 					try {
 						await dbManager.dropDatabase(dbName);
+						console.log(`[webhook] cleanup: dropped database=${dbName}`);
 					} catch (dbCleanupError) {
-						console.error("Failed to cleanup database:", dbCleanupError);
+						console.error(
+							`[webhook] cleanup: failed to drop database=${dbName}:`,
+							dbCleanupError,
+						);
 					}
 					try {
 						await dokploy.removeApplication({
 							applicationId: newApplication.applicationId,
 						});
+						console.log(
+							`[webhook] cleanup: removed application=${newApplication.applicationId}`,
+						);
 					} catch (cleanupError) {
-						console.error("Failed to cleanup application:", cleanupError);
+						console.error(
+							`[webhook] cleanup: failed to remove application=${newApplication.applicationId}:`,
+							cleanupError,
+						);
 					}
 					throw error;
 				}
 			}
 
 			// otherwise exists, trigger deploy on application
+			console.log(
+				`[webhook] redeploying existing application=${targetApplication.applicationId} for branch=${branch}`,
+			);
 			await dokploy.deployApplication({
 				applicationId: targetApplication.applicationId,
 			});
+			console.log(
+				`[webhook] redeploy triggered for application=${targetApplication.applicationId}`,
+			);
 
 			return c.json({
 				success: true,
@@ -257,14 +317,16 @@ webhookRouter.post("/azure", async (c) => {
 				applicationId: targetApplication.applicationId,
 			});
 		} else {
-			console.log("Unhandled Event", JSON.stringify(event, null, 2));
+			console.log(
+				`[webhook] unhandled event type: ${(event as any).eventType}`,
+			);
 			return c.json({
 				success: false,
 				message: `Event type ${(event as any).eventType} not handled`,
 			});
 		}
 	} catch (error) {
-		console.error("Webhook handler error:", error);
+		console.error("[webhook] unhandled error:", error);
 
 		return c.json(
 			{
