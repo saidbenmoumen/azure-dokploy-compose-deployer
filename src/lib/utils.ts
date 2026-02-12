@@ -47,3 +47,16 @@ export function generatePreviewUrl(branchName: string, devUrl: string): string {
 export function generateDbName(branchName: string): string {
 	return generatePreviewPrefix(branchName).replace(/-/g, "_");
 }
+
+/**
+ * Replace a value in a .env string by key name.
+ * Handles both template placeholders (KEY=${{project.X}}) and explicit values
+ * (KEY=something or KEY="something"). If the key doesn't exist, appends it.
+ */
+export function setEnvValue(env: string, key: string, value: string): string {
+	const regex = new RegExp(`^${key}=.*$`, "m");
+	if (regex.test(env)) {
+		return env.replace(regex, `${key}=${value}`);
+	}
+	return `${env}\n${key}=${value}`;
+}

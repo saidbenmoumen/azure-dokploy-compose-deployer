@@ -6,6 +6,7 @@ import {
 	extractBranchName,
 	generateDbName,
 	generatePreviewUrl,
+	setEnvValue,
 } from "../lib/utils";
 
 export const webhookRouter = new Hono();
@@ -206,13 +207,15 @@ webhookRouter.post("/azure", async (c) => {
 						`[webhook] created database=${dbCredentials.database} user=${dbCredentials.username}`,
 					);
 
-					const appEnv =
-						newApplication.env
-							?.replace("${{project.WP_HOME}}", previewUrl)
-							?.replace(
-								"${{project.DATABASE_URL}}",
-								dbCredentials.connectionUrl,
-							) ?? null;
+					let appEnv = newApplication.env ?? null;
+					if (appEnv) {
+						appEnv = setEnvValue(appEnv, "WP_HOME", previewUrl);
+						appEnv = setEnvValue(
+							appEnv,
+							"DATABASE_URL",
+							dbCredentials.connectionUrl,
+						);
+					}
 
 					// update new application general details
 					console.log(
