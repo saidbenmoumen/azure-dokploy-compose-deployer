@@ -1,7 +1,8 @@
 {
 	"name": "azure-dokploy-deployer",
 	"scripts": {
-		"dev": "bun run --hot src/index.ts"
+		"dev": "bun run --hot src/index.ts",
+		"test": "bun test"
 	},
 	"dependencies": {
 		"hono": "^4.11.5"
@@ -10,4 +11,3 @@
 		"@types/bun": "latest"
 	}
 }
-

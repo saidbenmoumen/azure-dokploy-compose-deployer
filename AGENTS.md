@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Project Overview
 
-Auto Deploy Service — a webhook bridge between Azure DevOps and Dokploy. On `git.push`, it creates/updates/deletes preview deployments in Dokploy and provisions per-branch MariaDB databases with dedicated credentials. Built on **Bun** runtime with **Hono** framework. No frontend — pure backend service.
+Auto Deploy Service — a webhook bridge between Azure DevOps and Dokploy. On `git.push`, it deploys matching applications and creates/updates/deletes preview deployments with optional per-repository, per-branch MariaDB databases. Built on **Bun** runtime with **Hono** framework. No frontend — pure backend service.
 
 ## Commands
 
@@ -15,6 +15,9 @@ bun install
 # Development with hot reload
 bun run dev
 
+# Tests
+bun test
+
 # Production
 bun run src/index.ts
 
@@ -22,7 +25,7 @@ bun run src/index.ts
 docker build -t auto-deploy .
 ```
 
-There is **no test suite, linter, or formatter** configured. No `bun test`, `eslint`, `prettier`, or `biome` commands exist. If you add tests, use `bun test` (Bun's built-in test runner).
+Tests use Bun's built-in test runner. There is no linter or formatter configured.
 
 ## Project Structure
 
@@ -30,7 +33,7 @@ There is **no test suite, linter, or formatter** configured. No `bun test`, `esl
 src/
   index.ts                  # Hono server entry point (default export with port + fetch)
   routes/
-    webhook.ts              # Main webhook handler — all preview deployment logic
+    webhook.ts              # Dynamic application discovery and preview lifecycle
   lib/
     dokploy-client.ts       # Typed HTTP client wrapping Dokploy REST API
     database.ts             # DatabaseManager — MySQL database/user lifecycle
@@ -80,7 +83,7 @@ Always use `import type { X }` as a separate statement — not inline `import { 
 |--------------------------|---------------------|----------------------------------|
 | Files and directories    | kebab-case          | `dokploy-client.ts`              |
 | Variables and functions  | camelCase           | `targetApplication`, `slugify`   |
-| Env var constants        | SCREAMING_SNAKE     | `DATABASE_HOST`, `PROJECT_ID`    |
+| Env var constants        | SCREAMING_SNAKE     | `DATABASE_HOST`, `DOKPLOY_URL`   |
 | Classes                  | PascalCase          | `DokployClient`, `DatabaseManager` |
 | Type aliases             | PascalCase          | `RouterInputs`, `AzureEvent`    |
 | Interfaces               | PascalCase          | `GitPushEvent`, `RefUpdate`      |
@@ -145,7 +148,7 @@ Always use `import type { X }` as a separate statement — not inline `import { 
 Accessed via `process.env.X` directly — no validation library. Two patterns:
 
 - **Startup-critical vars** (`DATABASE_*`): checked at module level, `throw` on missing
-- **Request-scoped vars** (`DOKPLOY_*`, `PROJECT_ID`, etc.): checked inside the route handler, return JSON error
+- **Request-scoped vars** (`DOKPLOY_*`): checked inside the route handler, return JSON error
 
 | Variable             | Description                                           |
 |----------------------|-------------------------------------------------------|
@@ -155,15 +158,16 @@ Accessed via `process.env.X` directly — no validation library. Two patterns:
 | `DOKPLOY_URL`        | Dokploy instance base URL                             |
 | `DOKPLOY_API_TOKEN`  | Dokploy API key                                       |
 | `DOKPLOY_DEV_URL`    | Base domain for preview URLs                          |
-| `PROJECT_ID`         | Source Dokploy project containing the template        |
-| `ENVIRONMENT_ID`     | Environment within the project                        |
-| `APPLICATION_ID`     | Template application to duplicate                     |
 
 ## Key Patterns to Know
 
-- **Preview naming:** Apps are `@{branch}`, URLs are `{slug}-{hash}.{dev_url}`, DB names are `{slug}_{hash}` (underscores)
+- **Application discovery:** Inventory all projects, then match generic Git applications by normalized repository URL and exact branch
+- **Preview templates:** An exact `staging` branch application opts its repository into preview deployments
+- **Preview naming:** Apps are `@{branch}`; URLs and DB names include repository, branch, and hash
 - **Snapshot-diff pattern:** To find a newly duplicated application, snapshot existing IDs before duplication, then diff after
-- **Database lifecycle:** Each preview gets its own DB + dedicated MySQL user; both are dropped on branch delete
+- **Preview locking:** MariaDB named locks serialize duplication for each staging template
+- **Environment-driven setup:** `DATABASE_URL` and `WP_HOME` are only managed when those keys exist on the staging application
+- **Database lifecycle:** Previews requesting `DATABASE_URL` get a dedicated DB/user; both are dropped on branch delete
 - **Bun SQL:** Uses `new SQL({ adapter: "mysql" })` with `.unsafe()` for DDL statements
 - **Logging:** `console.log` / `console.error` only — no logging library
 - **All async code** uses `async/await`; `Promise.all()` for parallel operations

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Auto Deploy Service - A webhook bridge between Azure DevOps and Dokploy that creates preview deployments for branches. When code is pushed, it duplicates a template application in Dokploy with a unique preview URL.
+Auto Deploy Service - A webhook bridge between Azure DevOps and Dokploy that deploys every application matching a pushed repository and branch. For new branches, it discovers and duplicates that repository's `staging` application with a unique preview URL and an optional database.
 
 ## Commands
 
@@ -27,10 +27,10 @@ docker build -t auto-deploy .
 ### Request Flow
 
 1. Azure DevOps sends `git.push` webhook to `/webhook/azure`
-2. `webhook.ts` parses the event and identifies branch/action
-3. For new branches: duplicates template application → updates config → creates domain → deploys
-4. For existing branches: triggers redeploy
-5. For deleted branches (objectId all zeros): removes the application
+2. `webhook.ts` inventories applications across all Dokploy projects
+3. For existing branches: deploys every repository and branch match
+4. For new branches: duplicates the matching repository's `staging` application → conditionally updates `DATABASE_URL`/`WP_HOME` → creates domain → deploys
+5. For deleted branches (objectId all zeros): removes managed preview applications and databases
 
 ### Key Components
 
@@ -38,11 +38,11 @@ docker build -t auto-deploy .
 - **`src/routes/webhook.ts`** - Main webhook handler with all preview deployment logic
 - **`src/lib/dokploy-client.ts`** - Typed API client wrapping Dokploy REST endpoints
 - **`src/lib/utils.ts`** - Branch name utilities: `slugify`, `hash`, `extractBranchName`, `generatePreviewUrl`
-- **`events.ts`** - Azure DevOps webhook type definitions derived from real payloads
+- **`types.ts`** - Azure DevOps webhook type definitions derived from real payloads
 
 ### Preview Naming Convention
 
-Applications are named `@{branch}` (e.g., `@feature/new-login`). Preview URLs follow `{slug}-{8-char-hash}.${dev_url}`.
+Applications are named `@{branch}` (e.g., `@feature/new-login`). Preview URLs and databases include the repository and branch with an 8-character hash.
 
 ### Environment Variables
 
@@ -50,13 +50,13 @@ Applications are named `@{branch}` (e.g., `@feature/new-login`). Preview URLs fo
 |----------|-------------|
 | `DOKPLOY_URL` | Dokploy instance base URL |
 | `DOKPLOY_API_TOKEN` | API key with project/application/domain permissions |
-| `DOKPLOY_DEV_URL` | Base domain for preview URLs (e.g., `dev.example.com` → previews at `{slug}-{hash}.dev.example.com`) | 
-| `PROJECT_ID` | Source project containing the template |
-| `ENVIRONMENT_ID` | Environment within the project |
-| `APPLICATION_ID` | Template application to duplicate |
+| `DOKPLOY_DEV_URL` | Base domain for repository-scoped preview URLs |
+| `DATABASE_HOST` | MariaDB host used for preview database provisioning |
+| `DATABASE_USER` | MariaDB administrative user |
+| `DATABASE_PASSWORD` | MariaDB administrative password |
 
 ### Dokploy API Endpoints Used
 
-- `project.one`, `project.duplicate` - Fetch/clone projects
+- `project.all`, `project.one`, `project.duplicate` - Discover and clone applications
 - `application.update`, `application.deploy`, `application.delete` - Manage application lifecycle
 - `domain.create`, `domain.delete`, `domain.byApplicationId` - Manage domains

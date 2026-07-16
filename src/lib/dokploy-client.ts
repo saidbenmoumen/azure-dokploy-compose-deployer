@@ -35,6 +35,10 @@ export class DokployClient {
 	}
 
 	// PROJECT
+	async getProjects() {
+		return this.request<RouterOutputs["project"]["all"]>("/project.all");
+	}
+
 	async duplicateProject(data: RouterInputs["project"]["duplicate"]) {
 		return this.request<RouterOutputs["project"]["duplicate"]>(
 			"/project.duplicate",

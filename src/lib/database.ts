@@ -5,6 +5,7 @@ export class DatabaseManager {
 	private db: InstanceType<typeof SQL>;
 	private host: string;
 	private port: number;
+	private lockQueues = new Map<string, Promise<void>>();
 
 	constructor(host: string, username: string, password: string, port = 3306) {
 		this.host = host;
@@ -15,7 +16,7 @@ export class DatabaseManager {
 			port,
 			username,
 			password,
-			idleTimeout: 60,
+			idleTimeout: 300,
 			connect_timeout: 60,
 			connection_timeout: 60,
 			connectionTimeout: 60,
@@ -40,6 +41,87 @@ export class DatabaseManager {
 		return `${prefix}_${suffix}`;
 	}
 
+	private validateDatabaseName(dbName: string): void {
+		if (!/^[a-zA-Z0-9_]{1,64}$/.test(dbName)) {
+			throw new Error(`Invalid database name: ${dbName}`);
+		}
+	}
+
+	/**
+	 * Run an operation while holding a MariaDB named lock.
+	 */
+	async withLock<T>(
+		lockName: string,
+		operation: () => Promise<T>,
+		timeoutSeconds = 60,
+	): Promise<T> {
+		const previousOperation = this.lockQueues.get(lockName) ?? Promise.resolve();
+		let releaseQueue!: () => void;
+		const currentOperation = new Promise<void>((resolve) => {
+			releaseQueue = resolve;
+		});
+		this.lockQueues.set(lockName, currentOperation);
+		await previousOperation;
+
+		try {
+			const connection = await this.db.reserve();
+			let acquired = false;
+			let shouldReleaseConnection = true;
+
+			try {
+				const rows = await connection`
+					SELECT GET_LOCK(${lockName}, ${timeoutSeconds}) AS acquired
+				`;
+				const lockResult = (
+					rows[0] as { acquired: number | null } | undefined
+				)?.acquired;
+				if (lockResult === null || lockResult === undefined) {
+					throw new Error(`Failed to acquire preview lock: ${lockName}`);
+				}
+				acquired = Number(lockResult) === 1;
+				if (!acquired) {
+					throw new Error(`Timed out acquiring preview lock: ${lockName}`);
+				}
+
+				return await operation();
+			} finally {
+				if (acquired) {
+					try {
+						const rows = await connection`
+							SELECT RELEASE_LOCK(${lockName}) AS released
+						`;
+						const released = (
+							rows[0] as { released: number | null } | undefined
+						)?.released;
+						if (Number(released) !== 1) {
+							throw new Error(`Lock was not owned: ${lockName}`);
+						}
+					} catch (error) {
+						console.error(
+							`Failed to release preview lock ${lockName}:`,
+							error,
+						);
+						shouldReleaseConnection = false;
+						try {
+							await connection.close({ timeout: 0 });
+						} catch (closeError) {
+							console.error(
+								`Failed to close preview lock connection ${lockName}:`,
+								closeError,
+							);
+						}
+					}
+				}
+				if (shouldReleaseConnection) connection.release();
+			}
+		} finally {
+			releaseQueue();
+			if (this.lockQueues.get(lockName) === currentOperation) {
+				this.lockQueues.delete(lockName);
+			}
+		}
+	}
+
 	/**
 	 * Create a new database with a dedicated user that has full access only to that database.
 	 * Returns the credentials and connection URL.
@@ -50,6 +132,7 @@ export class DatabaseManager {
 		password: string;
 		connectionUrl: string;
 	}> {
+		this.validateDatabaseName(dbName);
 		const username = this.generateUsername(dbName);
 		const password = this.generatePassword();
 
@@ -81,6 +164,7 @@ export class DatabaseManager {
 	 * Finds all users that have privileges on this database and removes them.
 	 */
 	async dropDatabase(dbName: string): Promise<void> {
+		this.validateDatabaseName(dbName);
 		// Find users with grants on this database
 		const users = await this.db.unsafe(
 			`SELECT DISTINCT GRANTEE FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA = '${dbName}'`,
