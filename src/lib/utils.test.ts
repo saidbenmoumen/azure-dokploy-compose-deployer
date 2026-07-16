@@ -29,7 +29,7 @@ describe("normalizeRepositoryUrl", () => {
 			normalizeRepositoryUrl(
 				"https://deploy-user:secret@dev.azure.com/OrganizationName/ProjectName/_git/RepositoryName",
 			),
-		).toBe("azure://organizationname/platform/website");
+		).toBe("azure://organizationname/projectname/repositoryname");
 	});
 
 	test("matches legacy Azure organization URLs", () => {
@@ -37,7 +37,7 @@ describe("normalizeRepositoryUrl", () => {
 			normalizeRepositoryUrl(
 				"https://organizationname.visualstudio.com/ProjectName/_git/RepositoryName",
 			),
-		).toBe("azure://organizationname/platform/website");
+		).toBe("azure://organizationname/projectname/repositoryname");
 	});
 
 	test("does not match repositories from different projects", () => {
