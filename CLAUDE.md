@@ -28,8 +28,8 @@ docker build -t auto-deploy .
 
 1. Azure DevOps sends `git.push` webhook to `/webhook/azure`
 2. `webhook.ts` inventories applications across all Dokploy projects
-3. For existing branches: deploys every repository and branch match
-4. For new branches: duplicates the matching repository's `staging` application → conditionally updates `DATABASE_URL`/`WP_HOME` → creates domain → deploys
+3. For existing branches: deploys repository and branch matches with Dokploy auto deploy enabled
+4. For new branches: duplicates the matching repository's auto-deploy-enabled `staging` application → conditionally updates `DATABASE_URL`/`WP_HOME` → creates domain → deploys
 5. For deleted branches (objectId all zeros): removes managed preview applications and databases
 
 ### Key Components

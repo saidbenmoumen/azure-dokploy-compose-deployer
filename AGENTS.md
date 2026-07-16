@@ -162,6 +162,7 @@ Accessed via `process.env.X` directly — no validation library. Two patterns:
 ## Key Patterns to Know
 
 - **Application discovery:** Inventory all projects, then match generic Git applications by normalized repository URL and exact branch
+- **Auto-deploy gate:** Existing matches deploy only when `autoDeploy === true`; disabled matches still prevent preview creation
 - **Preview templates:** An exact `staging` branch application opts its repository into preview deployments
 - **Preview naming:** Apps are `@{branch}`; URLs and DB names include repository, branch, and hash
 - **Snapshot-diff pattern:** To find a newly duplicated application, snapshot existing IDs before duplication, then diff after

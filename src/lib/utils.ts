@@ -18,6 +18,15 @@ export function hash(text: string, length: number = 8): string {
 }
 
 /**
+ * Check whether Dokploy permits automatic deployments for an application.
+ */
+export function isAutoDeployEnabled(
+	autoDeploy: boolean | null | undefined,
+): boolean {
+	return autoDeploy === true;
+}
+
+/**
  * Normalize a Git repository URL for identity comparisons.
  * Azure HTTPS and SSH clone URLs resolve to the same repository key.
  */

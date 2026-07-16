@@ -12,6 +12,7 @@ import {
 	getDatabaseNameFromEnv,
 	getEnvValue,
 	hash,
+	isAutoDeployEnabled,
 	normalizeRepositoryUrl,
 	setEnvValue,
 } from "../lib/utils";
@@ -116,9 +117,24 @@ async function deployApplications(
 	dokploy: DokployClient,
 	applications: ApplicationLocation[],
 	branch: string,
-): Promise<void> {
+): Promise<{
+	deployedApplicationIds: string[];
+	skippedApplicationIds: string[];
+}> {
+	const enabledApplications = applications.filter(({ application }) =>
+		isAutoDeployEnabled(application.autoDeploy),
+	);
+	const skippedApplications = applications.filter(
+		({ application }) => !isAutoDeployEnabled(application.autoDeploy),
+	);
+	for (const { application } of skippedApplications) {
+		console.log(
+			`[webhook] skipping application=${application.applicationId} branch=${branch} because auto deploy is disabled`,
+		);
+	}
+
 	const results = await Promise.allSettled(
-		applications.map(async ({ application }) => {
+		enabledApplications.map(async ({ application }) => {
 			console.log(
 				`[webhook] deploying application=${application.applicationId} for branch=${branch}`,
 			);
@@ -130,7 +146,7 @@ async function deployApplications(
 
 	const failedApplicationIds = results.flatMap((result, index) =>
 		result.status === "rejected"
-			? [applications[index]!.application.applicationId]
+			? [enabledApplications[index]!.application.applicationId]
 			: [],
 	);
 	if (failedApplicationIds.length > 0) {
@@ -138,6 +154,15 @@ async function deployApplications(
 			`Failed to trigger deployment for applications: ${failedApplicationIds.join(", ")}`,
 		);
 	}
+
+	return {
+		deployedApplicationIds: enabledApplications.map(
+			({ application }) => application.applicationId,
+		),
+		skippedApplicationIds: skippedApplications.map(
+			({ application }) => application.applicationId,
+		),
+	};
 }
 
 webhookRouter.post("/azure", async (c) => {
@@ -320,13 +345,20 @@ webhookRouter.post("/azure", async (c) => {
 		}
 
 		if (targetApplications.length > 0) {
-			await deployApplications(dokploy, targetApplications, branch);
+			const deploymentResult = await deployApplications(
+				dokploy,
+				targetApplications,
+				branch,
+			);
 			return c.json({
 				success: true,
 				branch,
-				applicationIds: targetApplications.map(
-					({ application }) => application.applicationId,
-				),
+				applicationIds: deploymentResult.deployedApplicationIds,
+				skippedApplicationIds: deploymentResult.skippedApplicationIds,
+				message:
+					deploymentResult.deployedApplicationIds.length === 0
+						? "Auto deploy is disabled for all matching applications"
+						: undefined,
 			});
 		}
 
@@ -361,6 +393,16 @@ webhookRouter.post("/azure", async (c) => {
 		}
 
 		const stagingApplication = stagingApplications[0]!;
+		if (!isAutoDeployEnabled(stagingApplication.application.autoDeploy)) {
+			console.log(
+				`[webhook] staging application=${stagingApplication.application.applicationId} has auto deploy disabled, skipping preview creation`,
+			);
+			return c.json({
+				success: true,
+				branch,
+				message: "Staging application has auto deploy disabled",
+			});
+		}
 		const lockName = `preview_${hash(
 			`${resource.repository.id}:${stagingApplication.application.applicationId}`,
 			40,
@@ -379,13 +421,20 @@ webhookRouter.post("/azure", async (c) => {
 					(branch !== STAGING_BRANCH || isStagingTemplate(application)),
 			);
 			if (existingApplications.length > 0) {
-				await deployApplications(dokploy, existingApplications, branch);
+				const deploymentResult = await deployApplications(
+					dokploy,
+					existingApplications,
+					branch,
+				);
 				return c.json({
 					success: true,
 					branch,
-					applicationIds: existingApplications.map(
-						({ application }) => application.applicationId,
-					),
+					applicationIds: deploymentResult.deployedApplicationIds,
+					skippedApplicationIds: deploymentResult.skippedApplicationIds,
+					message:
+						deploymentResult.deployedApplicationIds.length === 0
+							? "Auto deploy is disabled for all matching applications"
+							: undefined,
 				});
 			}
 
@@ -397,6 +446,18 @@ webhookRouter.post("/azure", async (c) => {
 			);
 			if (!currentStagingApplication) {
 				throw new Error("Staging application changed during preview creation");
+			}
+			if (
+				!isAutoDeployEnabled(currentStagingApplication.application.autoDeploy)
+			) {
+				console.log(
+					`[webhook] staging application=${currentStagingApplication.application.applicationId} has auto deploy disabled, skipping preview creation`,
+				);
+				return c.json({
+					success: true,
+					branch,
+					message: "Staging application has auto deploy disabled",
+				});
 			}
 
 			const projectBefore = await dokploy.getProjectById({

@@ -6,6 +6,7 @@ import {
 	generatePreviewPrefix,
 	getDatabaseNameFromEnv,
 	getEnvValue,
+	isAutoDeployEnabled,
 	normalizeRepositoryUrl,
 	setEnvValue,
 } from "./utils";
@@ -108,5 +109,14 @@ describe("environment helpers", () => {
 				"DATABASE_URL=mariadb://user:password@database:3306/unsafe-name",
 			),
 		).toBeNull();
+	});
+});
+
+describe("isAutoDeployEnabled", () => {
+	test("only enables explicit true values", () => {
+		expect(isAutoDeployEnabled(true)).toBeTrue();
+		expect(isAutoDeployEnabled(false)).toBeFalse();
+		expect(isAutoDeployEnabled(null)).toBeFalse();
+		expect(isAutoDeployEnabled(undefined)).toBeFalse();
 	});
 });
