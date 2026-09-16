@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import type { AzureEvent, GitPushEvent } from "../../types";
-import type { RouterOutputs } from "../lib/types/outputs";
+import type {
+	Application,
+	ApplicationLocation,
+} from "../lib/application-inventory";
+import { getApplicationInventory } from "../lib/application-inventory";
 import { DatabaseManager } from "../lib/database";
 import { DokployClient } from "../lib/dokploy-client";
 import {
@@ -44,36 +48,6 @@ const dbManager = new DatabaseManager(
 	DATABASE_USER,
 	DATABASE_PASSWORD,
 );
-
-type Project = RouterOutputs["project"]["one"];
-type Application = Project["environments"][number]["applications"][number];
-
-interface ApplicationLocation {
-	projectId: string;
-	environmentId: string;
-	application: Application;
-}
-
-async function getApplicationInventory(
-	dokploy: DokployClient,
-): Promise<ApplicationLocation[]> {
-	const projects = await dokploy.getProjects();
-	const detailedProjects = await Promise.all(
-		projects.map((project) =>
-			dokploy.getProjectById({ projectId: project.projectId }),
-		),
-	);
-
-	return detailedProjects.flatMap((project) =>
-		project.environments.flatMap((environment) =>
-			environment.applications.map((application) => ({
-				projectId: project.projectId,
-				environmentId: environment.environmentId,
-				application,
-			})),
-		),
-	);
-}
 
 function getRepositoryKeys(
 	repository: GitPushEvent["resource"]["repository"],
@@ -524,9 +498,17 @@ webhookRouter.post("/azure", async (c) => {
 				);
 				if (!environmentAfter) throw new Error("Staging environment not found");
 
-				const newApplications = environmentAfter.applications.filter(
+				const addedApplications = await Promise.all(
+					environmentAfter.applications
+						.filter(({ applicationId }) =>
+							!existingApplicationIds.has(applicationId),
+						)
+						.map(({ applicationId }) =>
+							dokploy.getApplicationById({ applicationId }),
+						),
+				);
+				const newApplications = addedApplications.filter(
 					(application) =>
-						!existingApplicationIds.has(application.applicationId) &&
 						application.sourceType === "git" &&
 						application.customGitBranch === STAGING_BRANCH &&
 						application.serverId ===
@@ -657,12 +639,27 @@ webhookRouter.post("/azure", async (c) => {
 							environment.environmentId ===
 							currentStagingApplication.environmentId,
 					);
-					for (const application of cleanupEnvironment?.applications ?? []) {
+					for (const { applicationId } of cleanupEnvironment?.applications ?? []) {
+						if (
+							existingApplicationIds.has(applicationId) ||
+							cleanupApplications.has(applicationId)
+						) {
+							continue;
+						}
+						let application: Application;
+						try {
+							application = await dokploy.getApplicationById({ applicationId });
+						} catch (lookupError) {
+							console.error(
+								`[webhook] cleanup: failed to read application=${applicationId}:`,
+								lookupError,
+							);
+							continue;
+						}
 						const repositoryKey = application.customGitUrl
 							? normalizeRepositoryUrl(application.customGitUrl)
 							: null;
 						const isDuplicatedApplication =
-							!existingApplicationIds.has(application.applicationId) &&
 							application.sourceType === "git" &&
 							application.serverId ===
 								currentStagingApplication.application.serverId &&

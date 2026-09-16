@@ -30,8 +30,8 @@ POST /webhook/azure
 For each event, the service:
 
 1. Extracts the Azure repository and first branch ref update.
-2. Calls Dokploy `project.all` to discover accessible project IDs.
-3. Calls `project.one` for each project to inventory applications and source settings.
+2. Calls Dokploy `project.all` to discover accessible project, environment, and application IDs.
+3. Calls `application.one` for each application to read its complete source settings, Auto Deploy flag, and environment.
 4. Normalizes the Azure and Dokploy Git URLs and finds repository matches.
 5. Finds applications configured for the exact pushed branch.
 6. Deploys matching applications whose `autoDeploy` value is `true`.
@@ -241,6 +241,7 @@ No `PROJECT_ID`, `ENVIRONMENT_ID`, or `APPLICATION_ID` variables are needed.
 The API key must be able to access every project that should participate in automatic deployment. It needs permission to:
 
 - List and read projects.
+- Read application details.
 - Duplicate a selected application through project duplication.
 - Update, deploy, and delete applications.
 - List, create, and delete domains.
@@ -342,7 +343,7 @@ Run the Bun test suite:
 bun test
 ```
 
-Tests cover repository URL normalization, repository-scoped naming, legacy cleanup naming, environment parsing, database-name safety, and Auto Deploy gating.
+Tests cover repository URL normalization, repository-scoped naming, legacy cleanup naming, environment parsing, database-name safety, and Auto Deploy gating. Webhook regression tests use a local mock Dokploy API returning summary-only project responses, with database operations stubbed, to cover deployments, preview creation, cleanup, deletion, and API failures. No live services are modified by the tests.
 
 ## Preview Lifecycle Details
 
@@ -356,6 +357,7 @@ Dokploy's duplicate API does not return the new application ID. The service ther
 2. Duplicates the staging application.
 3. Reads the project again.
 4. Identifies the newly added application ID.
+5. Reads the added application's full configuration through `application.one` before checking its source settings and configuring the preview.
 
 ### Failure Cleanup
 
@@ -373,9 +375,10 @@ The Dokploy client currently uses:
 
 | Endpoint | Purpose |
 |---|---|
-| `project.all` | Discover accessible project IDs |
-| `project.one` | Read environments and complete application source configuration |
+| `project.all` | Discover accessible project, environment, and application IDs |
+| `project.one` | Read application ID snapshots for preview duplication and cleanup |
 | `project.duplicate` | Duplicate the selected staging application |
+| `application.one` | Read complete application source settings, Auto Deploy flag, and environment |
 | `application.update` | Configure a new preview application |
 | `application.deploy` | Trigger deployment for an enabled application |
 | `application.delete` | Remove a managed preview application |
@@ -387,7 +390,7 @@ The Dokploy client currently uses:
 
 - Only Dokploy generic Git applications are matched for Azure events.
 - One Dokploy API key inventories one active Dokploy organization.
-- Every inventory performs `project.one` for each accessible project; very large installations may need caching or a direct index later.
+- Every inventory performs `application.one` for each accessible application in parallel; very large installations may need bounded concurrency or a direct index later.
 - Only the first ref update in an Azure push event is processed.
 - One enabled, non-copy `staging` application is allowed per repository.
 - All previews share one configured preview base domain and one MariaDB administration endpoint.
@@ -402,6 +405,7 @@ src/
   routes/
     webhook.ts              Azure event and preview lifecycle orchestration
   lib/
+    application-inventory.ts Discover application locations and fetch full details
     database.ts             MariaDB locks, database, and user management
     dokploy-client.ts       Typed Dokploy HTTP client
     utils.ts                Repository, environment, and naming utilities
@@ -411,6 +415,12 @@ types.ts                    Azure DevOps webhook contracts
 ```
 
 ## Troubleshooting
+
+### Dokploy 0.30.6 compatibility
+
+Project endpoints return application summaries, not full configuration. The client deliberately exposes only project, environment, and application IDs from these responses. All source matching and preview configuration use `application.one`, including the post-lock refresh, newly duplicated applications, and failure cleanup.
+
+The checked-in generated types predate this API change. No generation script is included in this repository, and Dokploy's OpenAPI response schemas do not describe these objects. As a compatibility exception to the usual endpoint-specific `RouterOutputs` return types, `getProjects()` and `getProjectById()` expose handwritten index projections in `dokploy-client.ts`. These narrow the generated project contracts without editing generated files. Full application reads validate the fields this service uses and return an explicit error if they are missing, instead of silently treating malformed responses as zero matching applications.
 
 ### Pushes do not deploy an application
 
